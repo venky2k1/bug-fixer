@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
-from transformers import RobertaTokenizer, RobertaForSequenceClassification
+from flask_cors import CORS  # Fix CORS issue
 import torch
+from transformers import RobertaTokenizer, RobertaForSequenceClassification
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS
 
-# Load CodeBERT Model for Bug Detection
+# Load CodeBERT model
 tokenizer = RobertaTokenizer.from_pretrained("microsoft/codebert-base")
 model = RobertaForSequenceClassification.from_pretrained("microsoft/codebert-base")
 
@@ -23,31 +25,15 @@ def detect_bug():
 
         # Tokenize and classify
         inputs = tokenizer(code, return_tensors="pt", truncation=True, padding=True)
-        outputs = model(**inputs)
+        outputs = model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
         prediction = torch.argmax(outputs.logits, dim=1).item()
 
         bug_status = "buggy" if prediction == 1 else "clean"
-        return jsonify({"bug_status": bug_status})
 
+        return jsonify({"status": bug_status})
+    
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/fix", methods=["POST"])
-def fix_code():
-    try:
-        data = request.get_json()
-        code = data.get("code", "")
-
-        if not code:
-            return jsonify({"error": "No code provided"}), 400
-
-        # Simple rule-based fix (replace common typos)
-        fixed_code = code.replace("prnt", "print").replace("imprt", "import")
-
-        return jsonify({"suggested_fix": fixed_code})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500  # Handle errors properly
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)  # Ensure compatibility with Docker
